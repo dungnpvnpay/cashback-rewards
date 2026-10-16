@@ -26,16 +26,18 @@ public class PurchaseController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public void record(@Valid @RequestBody PurchaseRequest request) {
-        recordPurchase.record(request.customerId(), request.merchantName(), request.mcc(),
-                request.amount(), request.purchasedAt());
+    public PurchaseResponse record(@Valid @RequestBody PurchaseRequest request) {
+        BigDecimal cashbackAmount = recordPurchase.record(request.merchantName(), request.amount());
+        return new PurchaseResponse(cashbackAmount);
     }
 
     public record PurchaseRequest(
             @NotBlank String customerId,
             @NotBlank String merchantName,
-            @NotBlank String mcc,
             @NotNull BigDecimal amount,
             @NotNull Instant purchasedAt) {
+    }
+
+    public record PurchaseResponse(BigDecimal cashbackAmount) {
     }
 }

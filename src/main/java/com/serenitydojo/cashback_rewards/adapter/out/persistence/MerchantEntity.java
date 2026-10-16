@@ -5,28 +5,28 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 
+import java.math.BigDecimal;
+
 @Entity
-@Table(name = "merchant")
+@Table(name = "merchants")
 class MerchantEntity {
 
     @Id
-    @Column(name = "normalized_name", nullable = false)
-    private String normalizedName;
-
-    @Column(name = "name", nullable = false)
     private String name;
 
-    @Column(name = "partner", nullable = false)
+    @Column(nullable = false)
     private boolean partner;
 
+    @Column(name = "cashback_rate", nullable = false)
+    private BigDecimal cashbackRate;
+
     protected MerchantEntity() {
-        // required by JPA
     }
 
-    MerchantEntity(String normalizedName, String name, boolean partner) {
-        this.normalizedName = normalizedName;
+    MerchantEntity(String name, boolean partner, BigDecimal cashbackRate) {
         this.name = name;
         this.partner = partner;
+        this.cashbackRate = cashbackRate;
     }
 
     String getName() {
@@ -35,5 +35,9 @@ class MerchantEntity {
 
     boolean isPartner() {
         return partner;
+    }
+
+    BigDecimal getCashbackRate() {
+        return cashbackRate;
     }
 }

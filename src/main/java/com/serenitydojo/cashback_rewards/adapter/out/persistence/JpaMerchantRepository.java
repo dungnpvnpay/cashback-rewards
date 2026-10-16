@@ -4,7 +4,6 @@ import com.serenitydojo.cashback_rewards.application.port.out.MerchantRepository
 import com.serenitydojo.cashback_rewards.domain.model.Merchant;
 import org.springframework.stereotype.Repository;
 
-import java.util.Locale;
 import java.util.Optional;
 
 @Repository
@@ -18,19 +17,12 @@ class JpaMerchantRepository implements MerchantRepository {
 
     @Override
     public void save(Merchant merchant) {
-        merchants.save(new MerchantEntity(normalize(merchant.name()), merchant.name(), merchant.partner()));
+        merchants.save(new MerchantEntity(merchant.name(), merchant.partner(), merchant.cashbackRate()));
     }
 
     @Override
     public Optional<Merchant> findByName(String name) {
-        return merchants.findById(normalize(name)).map(JpaMerchantRepository::toDomain);
-    }
-
-    private static String normalize(String name) {
-        return name.trim().toLowerCase(Locale.ROOT);
-    }
-
-    private static Merchant toDomain(MerchantEntity entity) {
-        return new Merchant(entity.getName(), entity.isPartner());
+        return merchants.findById(name)
+                .map(entity -> new Merchant(entity.getName(), entity.isPartner(), entity.getCashbackRate()));
     }
 }

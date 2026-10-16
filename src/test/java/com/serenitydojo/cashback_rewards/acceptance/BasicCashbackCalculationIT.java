@@ -1,6 +1,5 @@
 package com.serenitydojo.cashback_rewards.acceptance;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -13,11 +12,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
-import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.http.MediaType.APPLICATION_JSON;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -47,115 +44,71 @@ class BasicCashbackCalculationIT {
                                                  String merchantRate,
                                                  String purchaseAmount,
                                                  String expectedCashback) throws Exception {
-            String customerId = "cust-merchant-rate-" + merchantRate;
             String merchantName = "RateMerchant-" + merchantRate;
+            registerMerchant(merchantName, true, merchantRate);
 
-            registerPartnerMerchant(merchantName, merchantRate);
+            PurchaseResponse purchase = recordPurchase("cust-rate-" + merchantRate, merchantName, purchaseAmount);
 
-            recordPurchase(customerId, merchantName, purchaseAmount, "5999");
-
-            List<CashbackRecord> records = cashbackFor(customerId);
-
-            assertThat(records).hasSize(1);
-            assertThat(records.getFirst().cashbackAmount()).isEqualByComparingTo(expectedCashback);
+            assertThat(purchase.cashbackAmount()).isEqualByComparingTo(expectedCashback);
         }
     }
 
     @Nested
-    @DisplayName("Rule: Must only award cashback for purchases at partner merchants")
+    @DisplayName("Rule: Must only award cashback for purchases at registered partner merchants")
     class OnlyAwardsCashbackAtPartnerMerchants {
 
         @Test
-        @DisplayName("The one where a customer shops at a partner merchant and earns cashback")
-        void earnsCashbackAtPartnerMerchant() throws Exception {
-            registerCategory("5411", "Groceries", "0.02");
-            registerMerchant("GreenGrocer", true);
+        @DisplayName("The one where a customer pays $80 at GreenGrocer (partner, 3%) and earns $2.40")
+        void earnsCashbackAtAPartnerMerchant() throws Exception {
+            registerMerchant("GreenGrocer", true, "0.03");
 
-            recordPurchase("cust-001", "GreenGrocer", "80.00", "5411");
+            PurchaseResponse purchase = recordPurchase("cust-partner", "GreenGrocer", "80.00");
 
-            List<CashbackRecord> records = cashbackFor("cust-001");
-
-            assertThat(records).hasSize(1);
-            assertThat(records.getFirst().merchantName()).isEqualTo("GreenGrocer");
+            assertThat(purchase.cashbackAmount()).isEqualByComparingTo("2.40");
         }
 
         @Test
-        @DisplayName("The one where a customer shops at a non-partner merchant — no cashback record is created")
-        void doesNotEarnCashbackAtNonPartnerMerchant() throws Exception {
-            registerCategory("5411", "Groceries", "0.02");
-            registerMerchant("The Corner Café", false);
+        @DisplayName("The one where a customer pays $80 at a registered non-partner café — the purchase is accepted, but no cashback is awarded")
+        void earnsNoCashbackAtARegisteredNonPartnerMerchant() throws Exception {
+            registerMerchant("Corner Café", false, "0.03");
 
-            recordPurchase("cust-002", "The Corner Café", "80.00", "5411");
+            PurchaseResponse purchase = recordPurchase("cust-non-partner", "Corner Café", "80.00");
 
-            List<CashbackRecord> records = cashbackFor("cust-002");
-
-            assertThat(records).isEmpty();
+            assertThat(purchase.cashbackAmount()).isEqualByComparingTo("0.00");
         }
     }
 
-    private void registerCategory(String mcc, String name, String cashbackRate) throws Exception {
-        mockMvc.perform(post("/api/categories")
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "mcc": "%s",
-                                  "name": "%s",
-                                  "cashbackRate": "%s"
-                                }
-                                """.formatted(mcc, name, cashbackRate)))
-                .andExpect(status().isCreated());
-    }
-
-    private void registerMerchant(String name, boolean partner) throws Exception {
+    private void registerMerchant(String name, boolean partner, String cashbackRate) throws Exception {
         mockMvc.perform(post("/api/merchants")
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {
                                   "name": "%s",
-                                  "partner": %s
-                                }
-                                """.formatted(name, partner)))
-                .andExpect(status().isCreated());
-    }
-
-    private void registerPartnerMerchant(String name, String cashbackRate) throws Exception {
-        mockMvc.perform(post("/api/merchants")
-                        .contentType(APPLICATION_JSON)
-                        .content("""
-                                {
-                                  "name": "%s",
-                                  "partner": true,
+                                  "partner": %s,
                                   "cashbackRate": "%s"
                                 }
-                                """.formatted(name, cashbackRate)))
+                                """.formatted(name, partner, cashbackRate)))
                 .andExpect(status().isCreated());
     }
 
-    private void recordPurchase(String customerId, String merchantName, String amount, String mcc) throws Exception {
-        mockMvc.perform(post("/api/purchases")
+    private PurchaseResponse recordPurchase(String customerId, String merchantName, String amount) throws Exception {
+        String body = mockMvc.perform(post("/api/purchases")
                         .contentType(APPLICATION_JSON)
                         .content("""
                                 {
                                   "customerId": "%s",
                                   "merchantName": "%s",
                                   "amount": "%s",
-                                  "mcc": "%s",
                                   "purchasedAt": "2026-05-01T10:00:00Z"
                                 }
-                                """.formatted(customerId, merchantName, amount, mcc)))
-                .andExpect(status().is2xxSuccessful());
-    }
-
-    private List<CashbackRecord> cashbackFor(String customerId) throws Exception {
-        String body = mockMvc.perform(get("/api/customers/{customerId}/cashback", customerId))
-                .andExpect(status().isOk())
+                                """.formatted(customerId, merchantName, amount)))
+                .andExpect(status().isCreated())
                 .andReturn()
                 .getResponse()
                 .getContentAsString();
-        return objectMapper.readValue(body, new TypeReference<>() {
-        });
+        return objectMapper.readValue(body, PurchaseResponse.class);
     }
 
-    record CashbackRecord(String merchantName, String productCategory, BigDecimal cashbackAmount) {
+    record PurchaseResponse(BigDecimal cashbackAmount) {
     }
 }

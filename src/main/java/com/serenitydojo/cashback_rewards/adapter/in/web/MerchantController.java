@@ -12,6 +12,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.math.BigDecimal;
+
 @RestController
 @RequestMapping("/api/merchants")
 public class MerchantController {
@@ -25,11 +27,12 @@ public class MerchantController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public void register(@Valid @RequestBody MerchantRequest request) {
-        registerMerchant.register(new Merchant(request.name(), request.partner()));
+        registerMerchant.register(new Merchant(request.name(), request.partner(), request.cashbackRate()));
     }
 
     public record MerchantRequest(
             @NotBlank String name,
-            @NotNull Boolean partner) {
+            @NotNull Boolean partner,
+            @NotNull BigDecimal cashbackRate) {
     }
 }
